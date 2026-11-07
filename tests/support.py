@@ -62,10 +62,52 @@ def set_stream(text):
         f.write(text)
 
 
+OPTICAL_OUT = "alsa_output.ae9_optical"     # the separate optical output, hw:AE9,4
+
+
+def _add_optical_out(pw):
+    """Add the optical output sink the kit's fake predates (config/ae9-optical-out.conf)."""
+    nid = pw._node({"node.name": OPTICAL_OUT, "node.description": "Sound Blaster AE-9 Optical",
+                    "media.class": "Audio/Sink", "api.alsa.path": "hw:AE9,4",
+                    "priority.session": 2000}, state="suspended")
+    pw.objects[nid]["info"]["params"] = {"Format": [
+        {"mediaType": "audio", "mediaSubtype": "raw", "format": "S32LE", "rate": 48000,
+         "channels": 2, "position": ["FL", "FR"]}]}
+    pw._card_nodes.append(nid)
+    for ch in ("FL", "FR"):
+        pw._port(nid, "in", f"playback_{ch}", ch)
+    for ch in ("FL", "FR"):
+        pw._port(nid, "out", f"monitor_{ch}", ch, monitor=True)
+    pw.optical_out_db = None
+
+    level_of = pw.level_of
+
+    def with_optical(src_nid):
+        o = pw.objects.get(src_nid)
+        if o and o["info"]["props"].get("node.name") == OPTICAL_OUT:
+            return pw.optical_out_db if pw.optical_out_db is not None else float("-inf")
+        return level_of(src_nid)
+
+    pw.level_of = with_optical
+
+    # The kit's fake predates the Format params the app now shows; give the
+    # AE-9 nodes the formats the real card reports (pw-dump: S32LE).
+    for name, rate, ch in ((testing.SINK, 48000, 2), ("alsa_input.pci-0000_06_00.0.analog-stereo", 96000, 2),
+                           ("alsa_input.ae9_what_u_hear", 96000, 2), ("alsa_input.ae9_optical", 48000, 2),
+                           ("alsa_input.ae9_rear_rca", 48000, 2)):
+        n = pw.node(name)
+        if n:
+            n["info"]["params"] = {"Format": [
+                {"mediaType": "audio", "mediaSubtype": "raw", "format": "S32LE", "rate": rate,
+                 "channels": ch, "position": ["FL", "FR"]}]}
+    pw._bump()
+
+
 def reset(**card):
     """A fresh fake card for the next test or scenario."""
     global PW
     PW = testing.FakePipeWire(**dict(dict(rear_rca=True), **card))   # driver 0.10.1: Rear RCA In too
+    _add_optical_out(PW)
     return PW
 
 

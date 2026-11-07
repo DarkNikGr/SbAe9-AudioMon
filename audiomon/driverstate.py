@@ -21,6 +21,23 @@ from .core import child_cmd
 # What a dropout is most likely to follow, then the speaker setup that can make
 # What U Hear's two sides differ on purpose in DSP mode (names as driver 0.10.0
 # has them).
+def _int_param(name, default):
+    try:
+        return int(ae9.module_param(name))
+    except (TypeError, ValueError):
+        return default
+
+
+def playback_bits():
+    """The bit depth the card plays ("PCM Bit Depth" / pcm_bits, 24 or 32)."""
+    return _int_param("pcm_bits", 24)
+
+
+def capture_bits():
+    """The bit depth the card records (cap_bits, 32 unless the driver says otherwise)."""
+    return _int_param("cap_bits", 32)
+
+
 WATCH = ("Direct Mode Switch", "SBX Switch", "PCM Bit Depth", "Speaker Config",
          "Headphone Profile", "Head Unit Output",
          "FX Surround Switch", "Bass Redirect Switch",

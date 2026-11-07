@@ -5,6 +5,21 @@ Blaster AE-9. A debugging companion to
 [SbAe9-Drv](https://github.com/3xHelix/SbAe9-Drv) and
 [SbAe9-SBC](https://github.com/3xHelix/SbAe9-SBC).
 
+## Unreleased
+
+### Added
+
+- **Optical Out** meter: the separate optical playback output
+  (`alsa_output.ae9_optical`, hw:AE9,4, from the driver's
+  `config/ae9-optical-out.conf`) next to the main output, so what PipeWire
+  sends to the receiver is visible on its own. Passive like the output meter:
+  it never keeps the sink awake.
+- Every meter now shows the stream's **rate and bit depth** under the
+  Peak/RMS/Avg/Max rows, e.g. `48 kHz · 24-bit`. The card's playback depth
+  comes from `pcm_bits` (PCM Bit Depth) and its capture depth from
+  `cap_bits`, so an S32LE stream on a 24-bit card reads 24-bit. App streams
+  show their own format.
+
 ## 0.4.0 (2026-11-07)
 
 For driver 0.10.1: the new Rear RCA In meter, a ONE-SIDED flag for one

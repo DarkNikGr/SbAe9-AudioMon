@@ -501,3 +501,49 @@ class Glass(MonitorTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OpticalOut(MonitorTest):
+    """The separate optical output gets its own meter, next to the main one."""
+
+    def test_meter_found_and_wired(self):
+        panel = self.view.fixed["optical_out"]
+        self.assertEqual(panel.title_lbl.text(), "Optical Out")
+        self.assertIn("hw:AE9,4", panel.title_lbl.toolTip())
+        self.assertTrue(wait_until(lambda: self.wired("optical_out")))
+        self.assertIn(support.OPTICAL_OUT, self.log_text())
+
+    def test_meter_reads_what_pipewire_sends_to_it(self):
+        self.pw.optical_out_db = -18
+        self.pw.add_stream("mpv", "movie.mkv", -6)      # the main sink playing too
+        panel = self.view.fixed["optical_out"]
+        self.assertTrue(wait_until(lambda: panel.tick_peak_db is not None
+                                   and panel.tick_peak_db > -20))
+        self.assertAlmostEqual(panel.tick_peak_db, -18, delta=0.5)
+        self.assert_listen_only()
+
+
+class Formats(MonitorTest):
+    """Every meter shows the stream's rate and bit depth under its stats."""
+
+    def test_every_meter_shows_rate_and_bits(self):
+        for key in ("monitor", "optical_out", "wuh", "mic", "optical", "rear_rca"):
+            panel = self.view.fixed[key]
+            self.assertTrue(wait_until(lambda p=panel: "kHz" in p.fmt_lbl.text()), key)
+            self.assertIn("-bit", panel.fmt_lbl.text(), key)
+        # playback is 24-bit on the card (PCM Bit Depth), capture 32-bit
+        self.assertEqual(self.view.fixed["monitor"].fmt_lbl.text(), "48 kHz · 24-bit")
+        self.assertEqual(self.view.fixed["optical_out"].fmt_lbl.text(), "48 kHz · 24-bit")
+        self.assertEqual(self.view.fixed["wuh"].fmt_lbl.text(), "96 kHz · 32-bit")
+        self.assertEqual(self.view.fixed["rear_rca"].fmt_lbl.text(), "48 kHz · 32-bit")
+
+    def test_app_stream_shows_its_format(self):
+        sid = self.pw.add_stream("Firefox", "YouTube", -14)
+        self.assertTrue(wait_until(lambda: sid in self.view.streams))
+        panel = self.view.streams[sid][0]
+        self.pw.objects[sid]["info"]["params"] = {"Format": [
+            {"mediaType": "audio", "mediaSubtype": "raw", "format": "F32LE", "rate": 48000,
+             "channels": 2, "position": ["FL", "FR"]}]}
+        self.pw._bump()
+        self.assertTrue(wait_until(lambda: "48 kHz" in panel.fmt_lbl.text()))
+        self.assertIn("32-bit", panel.fmt_lbl.text())

@@ -222,6 +222,7 @@ class MeterPanel(QFrame):
         self.live = False
         self.alert = False
         self.note = None            # status text override (set by the AE-9 view)
+        self._format_text = ""
         self.tick_peak_db = None    # loudest sample this tick, None if no data
         self.last_sound = 0.0       # last time anything above digital silence arrived
         self._status_html = None
@@ -267,6 +268,10 @@ class MeterPanel(QFrame):
         layout.setSpacing(8)
         layout.addLayout(header)
         layout.addWidget(self.meter, 1)
+        # the stream's format, under the Peak/RMS/Avg/Max rows
+        self.fmt_lbl = label("", "muted")
+        self.fmt_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.fmt_lbl)
 
         self._started = False
         self.start(channels)
@@ -294,6 +299,12 @@ class MeterPanel(QFrame):
     def reset(self):
         self.state.reset_stats()
         self.meter.update()
+
+    def set_format(self, text):
+        """The stream format shown under the stats, e.g. '48 kHz · 24-bit'."""
+        if text != self._format_text:
+            self._format_text = text
+            self.fmt_lbl.setText(text)
 
     def _on_combo(self, idx):
         ch = CHANNEL_CHOICES[idx]

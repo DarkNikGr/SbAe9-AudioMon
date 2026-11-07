@@ -136,13 +136,13 @@ class SettingsPage(Page):
         self.body.addWidget(label("Monitoring", "sectionTitle"))
         self.auto_cb = check(
             "Auto-wire AE-9",
-            "Meter the AE-9's output, What U Hear, Mic / Aux, Optical In, Rear RCA In and "
+            "Meter the AE-9's output, the optical output, What U Hear, Mic / Aux, Optical In, Rear RCA In and "
             "every app stream playing to the AE-9. Listen-only: never changes defaults, moves "
             "streams or changes mixer controls (it only reads a few, for the log).",
             cfg["mode"] == "ae9", win.set_auto)
         self.idle_cb = check(
             "Let the AE-9 idle",
-            "Meters never keep the card awake. The output and app meters are passive, and "
+            "Meters never keep the card awake. The output, optical output and app meters are passive, and "
             "What U Hear / Mic / Aux / Optical In / Rear RCA In are only wired while the AE-9 sink is running. "
             "Off: everything stays wired and the AE-9 never suspends.",
             cfg["let_idle"], win.set_let_idle)

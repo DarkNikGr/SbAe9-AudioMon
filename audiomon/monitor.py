@@ -57,6 +57,7 @@ FIXED_TAPS = (
     # gated (only wired while the AE-9 sink runs when "let the AE-9 idle" is on,
     # so we never hold its capture PCMs open)
     ("monitor", "AE-9 Output (monitor)", "sbae9-audiomon.ae9.monitor", False),
+    ("optical_out", "AE-9 Optical Out (monitor)", "sbae9-audiomon.ae9.optical_out", False),
     ("wuh", "AE-9 What U Hear", "sbae9-audiomon.ae9.wuh", True),
     ("mic", "AE-9 Head Unit Mic / Aux", "sbae9-audiomon.ae9.mic", True),
     ("optical", "AE-9 Optical In", "sbae9-audiomon.ae9.optical", True),
@@ -65,11 +66,14 @@ FIXED_TAPS = (
 
 # On screen each meter shows a short name (and its state); where it is, jack by
 # jack, is on hover.
-SHORT_NAMES = {"monitor": "Output", "wuh": "What U Hear", "mic": "Mic / Aux", "optical": "Optical In",
-               "rear_rca": "Rear RCA In"}
+SHORT_NAMES = {"monitor": "Output", "optical_out": "Optical Out", "wuh": "What U Hear",
+               "mic": "Mic / Aux", "optical": "Optical In", "rear_rca": "Rear RCA In"}
 DETAILS = {
     "monitor": "What PipeWire sends to the AE-9: the card's RCA out in speaker mode, or the "
                "head unit's headphone jacks (3.5 mm and 1/4\") in headphone mode.",
+    "optical_out": "What PipeWire sends to the separate optical output (alsa_output.ae9_optical, "
+                   "hw:AE9,4). Independent of the main output: stereo only, no SBX or EQ, and the "
+                   "card's Master volume doesn't change it.",
     "wuh": "What the card actually plays, after its DSP (the card's What U Hear loopback, "
            "alsa_input.ae9_what_u_hear).",
     "mic": "The head unit's input: the XLR/TRS jack and the 3.5 mm mic jack, which share it "
@@ -79,6 +83,29 @@ DETAILS = {
     "rear_rca": "The head unit's rear RCA L/R input jacks, recorded alongside the mic "
                 "(alsa_input.ae9_rear_rca, hw:AE9,3; driver 0.10.1+ with config/ae9-rear-rca-in.conf).",
 }
+
+
+# PipeWire's sample format -> the bit depth it carries.
+FORMAT_BITS = {"S16": 16, "S24": 24, "S32": 32, "F32": 32, "F64": 64}
+
+
+def format_text(node, bits=None):
+    """'48 kHz · 24-bit' for a node's current PipeWire format, '' when idle.
+
+    The rate is the node's own; `bits` overrides the sample format's depth
+    where the driver plays fewer bits than the container (the card plays
+    24-bit from an S32LE stream by default)."""
+    for f in (node.params or {}).get("Format") or []:
+        rate = f.get("rate")
+        fmt = str(f.get("format") or "").upper()
+        depth = bits or FORMAT_BITS.get(fmt[:3])
+        parts = []
+        if rate:
+            parts.append(f"{rate / 1000:g} kHz")
+        if depth:
+            parts.append(f"{depth}-bit")
+        return " · ".join(parts)
+    return ""
 
 
 class SilenceDetector:
@@ -185,7 +212,7 @@ class AE9View(QWidget):
         row.setSpacing(14)
         self.fixed = {}
         for key, title, node_name, _gated in FIXED_TAPS:
-            passive = self.let_idle and key == "monitor"
+            passive = self.let_idle and key in ("monitor", "optical_out")
             p = MeterPanel(SHORT_NAMES[key], node_name, 2, passive=passive, fit=win.fit_window,
                            node_label=title, keep=onesided.KEEP if key in ("monitor", "wuh") else 0,
                            tooltip=f"{title}\n{DETAILS[key]}\nmeter node: {node_name}")
@@ -416,9 +443,13 @@ class AE9View(QWidget):
             node = found[key]
             if node is None:
                 panel.note = "no signal" if key == "optical" else "not found"
+                panel.set_format("")
                 self._set_wired(key, title, False, "absent")
                 continue
-            src = snap.out_ports(node, monitor=(key == "monitor"))
+            bits = (driverstate.playback_bits() if key in ("monitor", "optical_out")
+                    else driverstate.capture_bits())
+            panel.set_format(format_text(node, bits))
+            src = snap.out_ports(node, monitor=(key in ("monitor", "optical_out")))
             want = choose_channels(len(src)) if src else panel.channels
             if want != panel.channels:
                 panel.start(want)
@@ -469,6 +500,7 @@ class AE9View(QWidget):
                 self.streams[sid] = (panel, now, title)
                 self.streams_box.insertWidget(self.streams_box.count() - 1, panel)
                 self.log(f"App stream started: {title} (node {sid}, {len(src)} ch)")
+            self.streams[sid][0].set_format(format_text(n))
             self._wire(snap, self.streams[sid][0], src, None, now)
         if self.no_streams.isHidden() != bool(self.streams):
             self.no_streams.setVisible(not self.streams)
